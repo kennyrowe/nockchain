@@ -424,32 +424,32 @@ pub async fn init_with_kernel(
         .with_max_established_incoming(
             cli.as_ref()
                 .and_then(|c| c.max_established_incoming)
-                .and(Some(MAX_ESTABLISHED_INCOMING_CONNECTIONS)),
+                .or(Some(MAX_ESTABLISHED_INCOMING_CONNECTIONS)),
         )
         .with_max_established_outgoing(
             cli.as_ref()
                 .and_then(|c| c.max_established_outgoing)
-                .and(Some(MAX_ESTABLISHED_OUTGOING_CONNECTIONS)),
+                .or(Some(MAX_ESTABLISHED_OUTGOING_CONNECTIONS)),
         )
         .with_max_pending_incoming(
             cli.as_ref()
                 .and_then(|c| c.max_pending_incoming)
-                .and(Some(MAX_PENDING_INCOMING_CONNECTIONS)),
+                .or(Some(MAX_PENDING_INCOMING_CONNECTIONS)),
         )
         .with_max_pending_outgoing(
             cli.as_ref()
                 .and_then(|c| c.max_pending_outgoing)
-                .and(Some(MAX_PENDING_OUTGOING_CONNECTIONS)),
+                .or(Some(MAX_PENDING_OUTGOING_CONNECTIONS)),
         )
         .with_max_established(
             cli.as_ref()
                 .and_then(|c| c.max_established)
-                .and(Some(MAX_ESTABLISHED_CONNECTIONS)),
+                .or(Some(MAX_ESTABLISHED_CONNECTIONS)),
         )
         .with_max_established_per_peer(
             cli.as_ref()
                 .and_then(|c| c.max_established_per_peer)
-                .and(Some(MAX_ESTABLISHED_CONNECTIONS_PER_PEER)),
+                .or(Some(MAX_ESTABLISHED_CONNECTIONS_PER_PEER)),
         );
     let memory_limits = cli.as_ref().and_then(|c| {
         if c.max_system_memory_bytes.is_some() && c.max_system_memory_fraction.is_some() { panic!( "Must provide neither or one of --max-system-memory_bytes or --max-system-memory_percentage" )};
