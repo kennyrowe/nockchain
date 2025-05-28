@@ -94,6 +94,22 @@ pub const XTRA_JETS: &[HotEntry] = &[
         1,
         mary_transpose_jet,
     ),
+    (
+        &[
+            K_138,
+            Left(b"one"),
+            Left(b"two"),
+            Left(b"tri"),
+            Left(b"qua"),
+            Left(b"pen"),
+            Left(b"zeke"),
+            Left(b"ext-field"),
+            Left(b"mp-to-mega"),
+            Left(b"mpeval"),
+        ],
+        1,
+        mpeval_jet,
+    ),
 ];
 
 pub const EXTENSION_FIELD_JETS: &[HotEntry] = &[

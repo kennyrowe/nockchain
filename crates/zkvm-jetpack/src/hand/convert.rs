@@ -1,6 +1,6 @@
 use either::{Left, Right};
 use nockvm::jets::JetErr;
-use nockvm::noun::{Atom, Cell, Error, Noun, Result};
+use nockvm::noun::{Atom, Cell, Error, Noun, Result, D};
 
 use super::structs::HoonMapIter;
 use crate::form::mary::*;
@@ -89,6 +89,27 @@ impl NounExt for Noun {
             Err(Error::NotRepresentable)
         }
     }
+
+    fn uncell<const N: usize>(&self) -> Result<[Self; N]> {
+        let mut inp = *self;
+        let mut cnt = 0;
+        let mut ret = [(); N].map(|_| {
+            cnt += 1;
+            if cnt == N {
+                Ok(inp)
+            } else {
+                let c = inp.as_cell()?;
+                inp = c.tail();
+                Ok(c.head())
+            }
+        });
+        if let Some(e) = ret.iter_mut().filter(|v| v.is_err()).next() {
+            let n = core::mem::replace(e, Ok(D(0)));
+            return Err(n.unwrap_err());
+        }
+        Ok(ret.map(|v| v.unwrap()))
+    }
+
 }
 
 impl TryFrom<Noun> for MarySlice<'_> {
