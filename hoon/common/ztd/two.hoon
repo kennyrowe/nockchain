@@ -1415,112 +1415,6 @@
         deg
       (mul dep-deg exp)
     ==
-     ::
-  ++  mpeval-base
-    ~/  %mpeval-base
-    |=  $:  mp=mp-mega
-            args=bpoly  :: can be bpoly or fpoly
-            chal-map=(map @ belt)
-            dyns=bpoly
-            com-map=(map @ elt)
-        ==
-    ^-  elt
-    =/  l  |=(a=@ `@ux`a)
-    =/  init-zero=@ux  (l 0)
-    =/  init-one=@ux  (l 1)
-    ?:  =(~ mp)
-      init-zero
-    %+  roll  ~(tap by mp)
-    |=  [[k=bpoly v=belt] acc=_init-zero]
-    =/  coeff=@ux  (l v)
-    ?:  =(init-zero coeff)
-      acc
-    %+  badd  acc
-    %+  bmul  coeff
-    %+  roll  (range len.k)
-    |=  [i=@ res=_init-one]
-    ?:  =(init-zero res)
-      init-zero
-    %+  bmul  res
-    =/  ter  (~(snag bop k) i)
-    =/  [typ=mega-typ idx=@ exp=@ud]  (brek ter)
-    ?-  typ
-        %var
-      %+  bpow
-        (~(snag bop args) idx)
-      exp
-    ::
-        %rnd
-      %+  bpow
-        (l (~(got by chal-map) idx))
-      exp
-    ::
-        %dyn
-      %+  bpow
-        (l (~(snag bop dyns) idx))
-      exp
-    ::
-        %con
-      init-one
-    ::
-        %com
-      %+  bpow
-        (~(got by com-map) idx)
-      exp
-    ==
-     ::
-  ++  mpeval-ext
-    ~/  %mpeval-ext
-    |=  $:  mp=mp-mega
-            args=bpoly  :: can be bpoly or fpoly
-            chal-map=(map @ belt)
-            dyns=bpoly
-            com-map=(map @ elt)
-        ==
-    ^-  elt
-    =/  init-zero=@ux  (lift 0)
-    =/  init-one=@ux  (lift 1)
-    ?:  =(~ mp)
-      init-zero
-    %+  roll  ~(tap by mp)
-    |=  [[k=bpoly v=belt] acc=_init-zero]
-    =/  coeff=@ux  (lift v)
-    ?:  =(init-zero coeff)
-      acc
-    %+  fadd  acc
-    %+  fmul  coeff
-    %+  roll  (range len.k)
-    |=  [i=@ res=_init-one]
-    ?:  =(init-zero res)
-      init-zero
-    %+  fmul  res
-    =/  ter  (~(snag bop k) i)
-    =/  [typ=mega-typ idx=@ exp=@ud]  (brek ter)
-    ?-  typ
-        %var
-      %+  fpow
-        (~(snag fop args) idx)
-      exp
-    ::
-        %rnd
-      %+  fpow
-        (lift (~(got by chal-map) idx))
-      exp
-    ::
-        %dyn
-      %+  fpow
-        (lift (~(snag bop dyns) idx))
-      exp
-    ::
-        %con
-      init-one
-    ::
-        %com
-      %+  fpow
-        (~(got by com-map) idx)
-      exp
-    ==
-
   ::
   ++  mpeval
     ~/  %mpeval
@@ -1531,9 +1425,54 @@
             dyns=bpoly
             com-map=(map @ elt)
         ==
-    ?:  =(field %ext)
-      (mpeval-ext mp args chal-map dyns com-map)
-    (mpeval-base mp args chal-map dyns com-map)
+    ^-  elt
+    =/  add-op   ?:(=(field %base) badd fadd)
+    =/  mul-op   ?:(=(field %base) bmul fmul)
+    =/  pow-op   ?:(=(field %base) bpow fpow)
+    =/  aop-door   ?:(=(field %base) bop fop)
+    =/  lift-op  ?:(=(field %base) |=(v=@ `@ux`v) lift)
+    =/  init-zero=@ux  (lift-op 0)
+    =/  init-one=@ux  (lift-op 1)
+    ?:  =(~ mp)
+      init-zero
+    %+  roll  ~(tap by mp)
+    |=  [[k=bpoly v=belt] acc=_init-zero]
+    =/  coeff=@ux  (lift-op v)
+    ?:  =(init-zero coeff)
+      acc
+    %+  add-op  acc
+    %+  mul-op  coeff
+    %+  roll  (range len.k)
+    |=  [i=@ res=_init-one]
+    ?:  =(init-zero res)
+      init-zero
+    %+  mul-op  res
+    =/  ter  (~(snag bop k) i)
+    =/  [typ=mega-typ idx=@ exp=@ud]  (brek ter)
+    ?-  typ
+        %var
+      %+  pow-op
+        (~(snag aop-door args) idx)
+      exp
+    ::
+        %rnd
+      %+  pow-op
+        (lift-op (~(got by chal-map) idx))
+      exp
+    ::
+        %dyn
+      %+  pow-op
+        (lift-op (~(snag bop dyns) idx))
+      exp
+    ::
+        %con
+      init-one
+    ::
+        %com
+      %+  pow-op
+        (~(got by com-map) idx)
+      exp
+    ==
   --
 ::
 ++  mp-degree-mega
