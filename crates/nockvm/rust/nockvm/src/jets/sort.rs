@@ -3,9 +3,7 @@
 use crate::interpreter::Context;
 use crate::jets;
 use crate::jets::util::slot;
-use crate::mug::mug;
-use crate::noun::{Noun, NO, YES};
-use std::cmp::Ordering;
+use crate::noun::Noun;
 
 crate::gdb!();
 
@@ -18,48 +16,29 @@ pub fn jet_dor(context: &mut Context, subject: Noun) -> jets::Result {
 }
 
 pub fn jet_gor(context: &mut Context, subject: Noun) -> jets::Result {
-    let stack = &mut context.stack;
-
     let sam = slot(subject, 6)?;
     let a = slot(sam, 2)?;
     let b = slot(sam, 3)?;
 
-    let c = mug(stack, a);
-    let d = mug(stack, b);
-
-    match c.data().cmp(&d.data()) {
-        Ordering::Greater => Ok(NO),
-        Ordering::Less => Ok(YES),
-        Ordering::Equal => Ok(util::dor(stack, a, b)),
-    }
+    Ok(util::gor(&mut context.stack, a, b))
 }
 
 pub fn jet_mor(context: &mut Context, subject: Noun) -> jets::Result {
-    let stack = &mut context.stack;
-
     let sam = slot(subject, 6)?;
     let a = slot(sam, 2)?;
     let b = slot(sam, 3)?;
 
-    let c = mug(stack, a);
-    let d = mug(stack, b);
-
-    let e = mug(stack, c.as_noun());
-    let f = mug(stack, d.as_noun());
-
-    match e.data().cmp(&f.data()) {
-        Ordering::Greater => Ok(NO),
-        Ordering::Less => Ok(YES),
-        Ordering::Equal => Ok(util::dor(stack, a, b)),
-    }
+    Ok(util::dor(&mut context.stack, a, b))
 }
 
 pub mod util {
     use crate::jets::math::util::lth;
     use crate::jets::util::slot;
     use crate::mem::NockStack;
+    use crate::mug::mug;
     use crate::noun::{Noun, NO, YES};
     use either::{Left, Right};
+    use std::cmp::Ordering;
 
     pub fn dor(stack: &mut NockStack, a: Noun, b: Noun) -> Noun {
         if unsafe { a.raw_equals(&b) } {
@@ -107,13 +86,38 @@ pub mod util {
             }
         }
     }
+
+    pub fn gor(stack: &mut NockStack, a: Noun, b: Noun) -> Noun {
+        let c = mug(stack, a);
+        let d = mug(stack, b);
+
+        match c.data().cmp(&d.data()) {
+            Ordering::Greater => NO,
+            Ordering::Less => YES,
+            Ordering::Equal => dor(stack, a, b),
+        }
+    }
+
+    pub fn mor(stack: &mut NockStack, a: Noun, b: Noun) -> Noun {
+        let c = mug(stack, a);
+        let d = mug(stack, b);
+
+        let e = mug(stack, c.as_noun());
+        let f = mug(stack, d.as_noun());
+
+        match e.data().cmp(&f.data()) {
+            Ordering::Greater => NO,
+            Ordering::Less => YES,
+            Ordering::Equal => dor(stack, a, b),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::jets::util::test::{assert_jet, init_context, A};
-    use crate::noun::{D, T};
+    use crate::noun::{D, NO, T, YES};
     use ibig::ubig;
 
     #[test]

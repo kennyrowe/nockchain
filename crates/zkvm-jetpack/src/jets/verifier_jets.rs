@@ -1,14 +1,16 @@
 use nockvm::interpreter::Context;
 use nockvm::jets::util::slot;
 use nockvm::jets::JetErr;
-use nockvm::noun::{Cell, IndirectAtom, Noun};
+use nockvm::mem::NockStack;
+use nockvm::noun::{Atom, Cell, IndirectAtom, Noun, D};
+use nockvm_macros::tas;
 use tracing::debug;
 
 use crate::form::math::fext::*;
 use crate::form::poly::Poly;
-use crate::form::{Belt, FPolySlice, Felt};
+use crate::form::{bpow, brek, BPolySlice, Belt, Element, FPolySlice, Felt, MegaTyp, PolySlice};
 use crate::hand::handle::new_handle_mut_felt;
-use crate::hand::structs::HoonList;
+use crate::hand::structs::{HoonList, HoonMap};
 use crate::jets::utils::jet_err;
 use crate::noun::noun_ext::NounExt;
 
@@ -94,13 +96,25 @@ pub fn evaluate_deep_jet(context: &mut Context, subject: Noun) -> Result<Noun, J
         // Process first row trace columns
         let denom = fsub_(&omega_pow, &deep_challenge);
         (acc, num) = process_belt(
-            current_trace_elems, &trace_evaluations.0, &weights.0, full_width, num, &denom, &acc,
+            current_trace_elems,
+            &trace_evaluations.0,
+            &weights.0,
+            full_width,
+            num,
+            &denom,
+            &acc,
         );
 
         // Process second row trace columns (shifted by omicron)
         let denom = fsub_(&omega_pow, &fmul_(&deep_challenge, &omicron));
         (acc, num) = process_belt(
-            current_trace_elems, &trace_evaluations.0, &weights.0, full_width, num, &denom, &acc,
+            current_trace_elems,
+            &trace_evaluations.0,
+            &weights.0,
+            full_width,
+            num,
+            &denom,
+            &acc,
         );
 
         total_full_width += full_width;
@@ -116,13 +130,25 @@ pub fn evaluate_deep_jet(context: &mut Context, subject: Noun) -> Result<Noun, J
         // Process first row trace columns with new_comp_eval
         let denom = fsub_(&omega_pow, &new_comp_eval);
         (acc, num) = process_belt(
-            current_trace_elems, &trace_evaluations.0, &weights.0, full_width, num, &denom, &acc,
+            current_trace_elems,
+            &trace_evaluations.0,
+            &weights.0,
+            full_width,
+            num,
+            &denom,
+            &acc,
         );
 
         // Process second row trace columns with new_comp_eval (shifted by omicron)
         let denom = fsub_(&omega_pow, &fmul_(&new_comp_eval, &omicron));
         (acc, num) = process_belt(
-            current_trace_elems, &trace_evaluations.0, &weights.0, full_width, num, &denom, &acc,
+            current_trace_elems,
+            &trace_evaluations.0,
+            &weights.0,
+            full_width,
+            num,
+            &denom,
+            &acc,
         );
 
         total_full_width += full_width;
@@ -175,4 +201,229 @@ fn process_belt(
     }
 
     (acc, num)
+}
+
+// Combined roll on tap by
+fn roll_by<T, F: FnMut(T, Noun, Noun) -> Result<T, JetErr>>(
+    map: Noun,
+    mut acc: T,
+    f: &mut F,
+) -> Result<T, JetErr> {
+    // ~/  %tap
+    // =+  b=`(list _?>(?=(^ a) n.a))`~
+    // |.  ^+  b
+    // ?~  a
+    if map.is_atom() {
+        // b
+        return Ok(acc);
+    }
+
+    let [n, l, r] = map.uncell()?;
+    let [k, v] = n.uncell()?;
+
+    // $(a r.a, b [n.a $(a l.a)])
+    if r.is_cell() {
+        acc = roll_by(r, acc, f)?;
+    }
+    acc = f(acc, k, v)?;
+    if l.is_cell() {
+        acc = roll_by(l, acc, f)?;
+    }
+
+    Ok(acc)
+}
+
+// =/  add-op   ?:(=(field %base) badd fadd)
+// =/  mul-op   ?:(=(field %base) bmul fmul)
+// =/  aop-door   ?:(=(field %base) bop fop)
+// =/  init-zero=@ux  (lift-op 0)
+// =/  init-one=@ux  (lift-op 1)
+trait Fops:
+    Element + Copy + core::ops::Add<Output = Self> + core::ops::Mul<Output = Self> + PartialEq + Eq
+{
+    fn to_noun(self, stack: &mut NockStack) -> Noun;
+    fn from_noun(noun: Noun) -> Result<Self, JetErr>;
+    // =/  pow-op   ?:(=(field %base) bpow fpow)
+    fn pow(&self, exp: u64) -> Self;
+    // =/  lift-op  ?:(=(field %base) |=(v=@ `@ux`v) lift)
+    fn lift(v: Belt) -> Self;
+}
+
+impl Fops for Belt {
+    fn to_noun(self, stack: &mut NockStack) -> Noun {
+        Atom::new(stack, self.0).as_noun()
+    }
+
+    fn from_noun(noun: Noun) -> Result<Self, JetErr> {
+        Ok(Belt(noun.as_atom()?.as_u64()?))
+    }
+
+    fn pow(&self, exp: u64) -> Self {
+        Self(bpow(self.0, exp))
+    }
+
+    fn lift(v: Belt) -> Self {
+        v
+    }
+}
+
+impl Fops for Felt {
+    fn to_noun(self, stack: &mut NockStack) -> Noun {
+        let (a, b) = new_handle_mut_felt(stack);
+        *b = self;
+        a.as_noun()
+    }
+
+    fn from_noun(noun: Noun) -> Result<Self, JetErr> {
+        if let Ok(r) = noun.as_felt() {
+            Ok(*r)
+        } else {
+            jet_err()
+        }
+    }
+
+    fn pow(&self, exp: u64) -> Self {
+        fpow_(self, exp)
+    }
+
+    fn lift(v: Belt) -> Self {
+        Felt::lift(v)
+    }
+}
+
+pub fn mpeval_jet(context: &mut Context, subject: Noun) -> Result<Noun, JetErr> {
+    // |=  $:  field=?(%ext %base)
+    //         mp=mp-mega
+    //         args=bpoly  :: can be bpoly or fpoly
+    //         chal-map=(map @ belt)
+    //         dyns=bpoly
+    //         com-map=(map @ elt)
+    //     ==
+    // ^-  elt
+    let sam = slot(subject, 6)?;
+    let stack = &mut context.stack;
+    let [field, mp, args, chal_map, dyns, com_map] = sam.uncell()?;
+
+    let Ok(dyns) = BPolySlice::try_from(dyns) else {
+        return jet_err();
+    };
+
+    let ret = match field.as_direct()?.data() {
+        tas!(b"ext") => mpeval::<Felt>(stack, mp, args, chal_map, dyns, com_map)?.to_noun(stack),
+        tas!(b"base") => mpeval::<Belt>(stack, mp, args, chal_map, dyns, com_map)?.to_noun(stack),
+        _ => return jet_err(),
+    };
+
+    Ok(ret)
+}
+
+fn mpeval<F: Fops>(
+    stack: &mut NockStack,
+    mp: Noun,
+    args: Noun,
+    chal_map: Noun,
+    dyns: BPolySlice,
+    com_map: Noun,
+) -> Result<F, JetErr>
+where
+    for<'a> PolySlice<'a, F>: TryFrom<Noun>,
+{
+    let Ok(args) = PolySlice::try_from(args) else {
+        return jet_err();
+    };
+
+    let chal_map = HoonMap::try_from(chal_map).ok();
+    let com_map = HoonMap::try_from(com_map).ok();
+
+    // ?:  =(~ mp)
+    if mp.is_atom() {
+        // init-zero
+        return Ok(F::zero());
+    }
+
+    // %+  roll  ~(tap by mp)
+    // |=  [[k=bpoly v=belt] acc=_init-zero]
+    roll_by(mp, F::zero(), &mut |acc, k, v| {
+        let Ok(k) = BPolySlice::try_from(k) else {
+            return jet_err();
+        };
+        let v = Belt::from_noun(v)?;
+        // =/  coeff=@ux  (lift-op v)
+        let coeff = F::lift(v);
+        // ?:  =(init-zero coeff)
+        if coeff == F::zero() {
+            // acc
+            return Ok(acc);
+        }
+
+        // %+  add-op  acc
+        // %+  mul-op  coeff
+        // %+  roll  (range len.k)
+        // |=  [i=@ res=_init-one]
+        // ?:  =(init-zero res)
+        //   init-zero
+        let res = k
+            // =/  ter  (~(snag bop k) i)
+            .iter()
+            .copied()
+            // =/  [typ=mega-typ idx=@ exp=@ud]  (brek ter)
+            .map(brek)
+            .map(|(typ, idx, exp)| {
+                // ?-  typ
+                match typ {
+                    //     %var
+                    MegaTyp::Var => {
+                        //   %+  pow-op
+                        //     (~(snag aop-door args) idx)
+                        //   exp
+                        args.0[idx].pow(exp)
+                    }
+                    // ::
+                    //     %rnd
+                    MegaTyp::Rnd => {
+                        //   %+  pow-op
+                        //     (lift-op (~(got by chal-map) idx))
+                        //   exp
+                        let (_, v) = chal_map
+                            .as_ref()
+                            .unwrap()
+                            .get(stack, D(idx as _))
+                            .expect("Index not in chal-map");
+                        F::lift(Belt(v.as_atom().unwrap().as_u64().unwrap())).pow(exp)
+                    }
+                    // ::
+                    //     %dyn
+                    MegaTyp::Dyn => {
+                        //   %+  pow-op
+                        //     (lift-op (~(snag bop dyns) idx))
+                        //   exp
+                        F::lift(dyns.0[idx]).pow(exp)
+                    }
+                    // ::
+                    //     %con
+                    MegaTyp::Con => {
+                        //   init-one
+                        F::one()
+                    }
+                    // ::
+                    //     %com
+                    MegaTyp::Com => {
+                        //   %+  pow-op
+                        //     (~(got by com-map) idx)
+                        //   exp
+                        let (_, v) = com_map
+                            .as_ref()
+                            .unwrap()
+                            .get(stack, D(idx as _))
+                            .expect("Index not in com-map");
+                        F::from_noun(v).unwrap().pow(exp)
+                    }
+                }
+                // ==
+            })
+            // %+  mul-op  res
+            .fold(F::one(), core::ops::Mul::mul);
+
+        Ok(acc + (coeff * res))
+    })
 }

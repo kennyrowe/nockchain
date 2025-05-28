@@ -1,4 +1,9 @@
+use nockvm::jets::sort::util::gor;
+use nockvm::mem::NockStack;
 use nockvm::noun::{Cell, Noun};
+use nockvm::unifying_equality::unifying_equality;
+
+use crate::noun::noun_ext::NounExt;
 
 #[derive(Copy, Clone)]
 pub struct HoonList {
@@ -100,6 +105,27 @@ pub struct HoonMap {
     pub(super) node: Noun,
     pub(super) left: Option<Cell>,
     pub(super) right: Option<Cell>,
+}
+
+impl HoonMap {
+    pub fn get(&self, stack: &mut NockStack, mut k: Noun) -> Option<(Noun, Noun)> {
+        let [mut ck, cv] = self.node.uncell().ok()?;
+
+        if unsafe { unifying_equality(stack, &mut ck, &mut k) } {
+            // ?:  =(b p.n.a)
+            //   (some q.n.a)
+            Some((ck, cv))
+        } else if gor(stack, k, ck).as_direct().map(|v| v.data()) == Ok(0) {
+            // ?:  (gor b p.n.a)
+            //   $(a l.a)
+            let map: Self = self.left?.try_into().ok()?;
+            map.get(stack, k)
+        } else {
+            // $(a r.a)
+            let map: Self = self.right?.try_into().ok()?;
+            map.get(stack, k)
+        }
+    }
 }
 
 #[allow(dead_code)]
