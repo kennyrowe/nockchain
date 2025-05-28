@@ -17,6 +17,25 @@ pub trait Element: Clone {
     fn one() -> Self;
 }
 
+impl Element for Felt {
+    #[inline(always)]
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+    #[inline(always)]
+    fn zero() -> Self {
+        Felt::zero()
+    }
+    #[inline(always)]
+    fn len() -> usize {
+        3
+    }
+    #[inline(always)]
+    fn one() -> Self {
+        Felt::one()
+    }
+}
+
 impl Element for Belt {
     #[inline(always)]
     fn is_zero(&self) -> bool {

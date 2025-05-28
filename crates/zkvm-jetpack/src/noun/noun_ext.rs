@@ -14,10 +14,11 @@ pub trait AtomExt {
 
 // Note: since these are methods for converting to other types,
 // their implementations are found in hand/convert
-pub trait NounExt {
+pub trait NounExt: Sized {
     fn as_belt(&self) -> Result<Belt>;
     fn as_felt<'a>(&self) -> Result<&'a Felt>;
     fn as_mut_felt<'a>(&self) -> Result<&'a mut Felt>;
+    fn uncell<const N: usize>(&self) -> Result<[Self; N]>;
 }
 
 pub trait IndirectAtomExt {
